@@ -51,7 +51,6 @@ function showNotification(title, message) {
 // 设置代理配置
 async function setProxySettings(config) {
   try {
-    // 确保配置对象的正确性
     const settings = {
       value: {
         mode: config.mode,
@@ -61,7 +60,12 @@ async function setProxySettings(config) {
             host: config.rules.singleProxy.host,
             port: config.rules.singleProxy.port
           },
-          bypassList: config.rules.bypassList || []
+          bypassList: [...config.rules.bypassList, ...whitelistDomains.map(domain => {
+            if (domain.startsWith('*.')) {
+              return '*.' + domain.slice(2);
+            }
+            return domain;
+          })]
         } : undefined
       },
       scope: 'regular'
@@ -77,14 +81,32 @@ async function setProxySettings(config) {
 // 更新代理配置
 function updateProxyConfig(config) {
   if (config.username && config.password) {
-    // 在代理配置中添加认证信息
     proxyConfig.rules.singleProxy.username = config.username;
     proxyConfig.rules.singleProxy.password = config.password;
   }
 
   proxyConfig.rules.singleProxy.host = config.host;
   proxyConfig.rules.singleProxy.port = parseInt(config.port);
+  
+  whitelistDomains = config.whitelist || [];
+  chrome.storage.local.get(['proxyEnabled'], function(result) {
+    if (result.proxyEnabled) {
+      setProxySettings(proxyConfig);
+    }
+  });
 }
+
+// 添加图标点击事件监听
+chrome.action.onClicked.addListener(async () => {
+  try {
+    const result = await chrome.storage.local.get(['proxyEnabled']);
+    const newState = !result.proxyEnabled;
+    await updateProxyState(newState);
+  } catch (error) {
+    console.error('切换代理状态失败:', error);
+    showNotification('Socks5 代理错误', '切换代理状态失败');
+  }
+});
 
 // 监听代理错误
 chrome.proxy.onProxyError.addListener(function(details) {
@@ -92,21 +114,9 @@ chrome.proxy.onProxyError.addListener(function(details) {
   showNotification('Socks5 代理错误', '代理连接失败：' + details.error);
 });
 
-// 监听请求错误
-chrome.webRequest.onErrorOccurred.addListener(
-  function(details) {
-    if (details.error === 'net::ERR_PROXY_CONNECTION_FAILED') {
-      showNotification('Socks5 代理错误', '无法连接到代理服务器，请检查代理设置和服务器状态');
-    }
-  },
-  {urls: ['<all_urls>']}
-);
-
 // 监听消息
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-  if (request.action === 'toggleProxy') {
-    updateProxyState(request.enabled);
-  } else if (request.action === 'updateProxyConfig') {
+  if (request.action === 'updateProxyConfig') {
     updateProxyConfig(request.config);
     whitelistDomains = request.config.whitelist || [];
     
@@ -144,45 +154,15 @@ async function updateProxyState(enabled) {
   }
 }
 
-// 初始化状态
-chrome.runtime.onInstalled.addListener(async () => {
-  try {
-    const result = await chrome.storage.local.get(['proxyEnabled', 'proxyConfig']);
+// 修改初始化代码
+function initializeProxy() {
+  chrome.storage.local.get(['proxyEnabled', 'proxyConfig'], function(result) {
     if (result.proxyConfig) {
       updateProxyConfig(result.proxyConfig);
     }
-    await updateProxyState(result.proxyEnabled || false);
-  } catch (error) {
-    console.error('初始化代理状态失败:', error);
-  }
-});
+    updateProxyState(result.proxyEnabled || false);
+  });
+}
 
-// 添加新的监听器来处理请求头
-chrome.webRequest.onBeforeSendHeaders.addListener(
-  function(details) {
-    let headers = details.requestHeaders;
-    // 添加禁用缓存的头部
-    headers.push({name: 'Cache-Control', value: 'no-cache'});
-    headers.push({name: 'Pragma', value: 'no-cache'});
-    return {requestHeaders: headers};
-  },
-  {urls: ['<all_urls>']},
-  ['blocking', 'requestHeaders']
-);
-
-// 添加WebSocket请求监听
-chrome.webRequest.onBeforeRequest.addListener(
-  function(details) {
-    // 检查是否为WebSocket请求
-    if (details.url.startsWith('ws://') || details.url.startsWith('wss://')) {
-      console.log('WebSocket请求:', details.url);
-      // WebSocket请求将自动使用当前的代理设置
-    }
-    return {};
-  },
-  {
-    urls: ['<all_urls>'],
-    types: ['websocket']
-  },
-  ['blocking']
-); 
+// 初始化
+chrome.runtime.onInstalled.addListener(initializeProxy);

@@ -14,8 +14,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "Socks5 Proxy Manager",
-    "default_popup": "popup.html"
+    "default_title": "Socks5 Proxy Manager"
   },
   "options_ui": {
     "page": "options.html",
@@ -23,11 +22,9 @@
   },
   "permissions": [
     "proxy",
-    "webRequest",
-    "webRequestBlocking",
-    "<all_urls>",
     "storage",
-    "notifications"
+    "notifications",
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
