@@ -23,8 +23,7 @@
   "permissions": [
     "proxy",
     "storage",
-    "notifications",
-    "scripting"
+    "notifications"
   ],
   "host_permissions": [
     "<all_urls>"
