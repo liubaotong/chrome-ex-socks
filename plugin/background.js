@@ -208,16 +208,39 @@ async function updateProxyState(enabled) {
 // 修改初始化代码
 async function initializeProxy() {
   try {
-    const result = await chrome.storage.local.get(['proxyEnabled', 'proxyConfig']);
+    // 强制设置为关闭状态
+    await chrome.storage.local.set({ proxyEnabled: false });
+    
+    // 加载现有配置
+    const result = await chrome.storage.local.get(['proxyConfig']);
     if (result.proxyConfig) {
       await updateProxyConfig(result.proxyConfig);
     }
-    await updateProxyState(result.proxyEnabled || false);
+    
+    // 更新状态为关闭
+    await updateProxyState(false);
   } catch (error) {
     console.error('初始化代理失败:', error);
     showNotification('Socks5 代理错误', '初始化代理失败');
   }
 }
 
-// 初始化
+// 插件安装或更新时初始化
 chrome.runtime.onInstalled.addListener(initializeProxy);
+
+// 浏览器启动时初始化（确保代理为关闭状态）
+chrome.runtime.onStartup.addListener(async () => {
+  try {
+    // 直接设置为关闭状态
+    await updateProxyState(false);
+    await chrome.storage.local.set({ proxyEnabled: false });
+  } catch (error) {
+    console.error('浏览器启动时初始化代理失败:', error);
+    showNotification('Socks5 代理错误', '初始化代理失败');
+  }
+});
+
+// 当扩展被挂起时（比如浏览器关闭前）确保代理被关闭
+chrome.runtime.onSuspend.addListener(async () => {
+  await updateProxyState(false);
+});
