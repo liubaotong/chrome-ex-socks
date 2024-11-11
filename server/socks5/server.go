@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
+	"time"
 )
 
 type Config struct {
@@ -97,6 +99,14 @@ const (
 	ATYP_IPV6   = 0x04
 )
 
+func isConnectionReset(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "connection reset by peer") ||
+		   strings.Contains(err.Error(), "broken pipe")
+}
+
 func (s *Server) handleConnect(conn net.Conn, atyp byte) error {
 	// 1. 解析目标地址
 	var host string
@@ -180,17 +190,48 @@ func (s *Server) handleConnect(conn net.Conn, atyp byte) error {
 	
 	errCh := make(chan error, 2)
 	go func() {
-		_, err := io.Copy(targetConn, conn)
-		errCh <- err
+		// 添加重试机制
+		for retries := 0; retries < 3; retries++ {
+			_, err := io.Copy(targetConn, conn)
+			if err != nil && !isConnectionReset(err) {
+				errCh <- err
+				return
+			}
+			if err == nil {
+				errCh <- nil
+				return
+			}
+			// 如果是连接重置，等待短暂时间后重试
+			time.Sleep(time.Second * time.Duration(retries+1))
+		}
+		errCh <- errors.New("达到最大重试次数")
 	}()
+
 	go func() {
-		_, err := io.Copy(conn, targetConn)
-		errCh <- err
+		// 添加重试机制
+		for retries := 0; retries < 3; retries++ {
+			_, err := io.Copy(conn, targetConn)
+			if err != nil && !isConnectionReset(err) {
+				errCh <- err
+				return
+			}
+			if err == nil {
+				errCh <- nil
+				return
+			}
+			// 如果是连接重置，等待短暂时间后重试
+			time.Sleep(time.Second * time.Duration(retries+1))
+		}
+		errCh <- errors.New("达到最大重试次数")
 	}()
 
 	// 等待任意一个方向的数据传输出错或完成
 	err = <-errCh
-	if err != nil && err != io.EOF {
+	if err != nil {
+		if isConnectionReset(err) {
+			s.logger.Debug("连接被重置，可能是正常的连接关闭: %v", err)
+			return nil
+		}
 		return fmt.Errorf("数据转发错误: %v", err)
 	}
 

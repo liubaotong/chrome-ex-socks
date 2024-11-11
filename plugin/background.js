@@ -155,4 +155,34 @@ chrome.runtime.onInstalled.addListener(async () => {
   } catch (error) {
     console.error('初始化代理状态失败:', error);
   }
-}); 
+});
+
+// 添加新的监听器来处理请求头
+chrome.webRequest.onBeforeSendHeaders.addListener(
+  function(details) {
+    let headers = details.requestHeaders;
+    // 添加禁用缓存的头部
+    headers.push({name: 'Cache-Control', value: 'no-cache'});
+    headers.push({name: 'Pragma', value: 'no-cache'});
+    return {requestHeaders: headers};
+  },
+  {urls: ['<all_urls>']},
+  ['blocking', 'requestHeaders']
+);
+
+// 添加WebSocket请求监听
+chrome.webRequest.onBeforeRequest.addListener(
+  function(details) {
+    // 检查是否为WebSocket请求
+    if (details.url.startsWith('ws://') || details.url.startsWith('wss://')) {
+      console.log('WebSocket请求:', details.url);
+      // WebSocket请求将自动使用当前的代理设置
+    }
+    return {};
+  },
+  {
+    urls: ['<all_urls>'],
+    types: ['websocket']
+  },
+  ['blocking']
+); 
