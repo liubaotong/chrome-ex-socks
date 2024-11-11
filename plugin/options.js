@@ -101,11 +101,48 @@ function showStatus(message, success) {
   }, 3000);
 }
 
+// 更新代理状态显示
+async function updateProxyStateUI() {
+  const result = await chrome.storage.local.get(['proxyEnabled']);
+  const enabled = result.proxyEnabled || false;
+  
+  const stateText = document.getElementById('proxyState');
+  const toggleBtn = document.getElementById('toggleProxy');
+  
+  stateText.textContent = enabled ? '已启用' : '已关闭';
+  stateText.style.color = enabled ? '#4CAF50' : '#666';
+  
+  toggleBtn.textContent = enabled ? '关闭代理' : '开启代理';
+  toggleBtn.className = 'toggle-button' + (enabled ? ' enabled' : '');
+}
+
+// 切换代理状态
+async function toggleProxy() {
+  const result = await chrome.storage.local.get(['proxyEnabled']);
+  const newState = !result.proxyEnabled;
+  
+  await chrome.runtime.sendMessage({ 
+    action: 'toggleProxy',
+    enabled: newState
+  });
+  
+  await updateProxyStateUI();
+}
+
 // 初始化
 document.addEventListener('DOMContentLoaded', async () => {
   await loadOptions();
   await loadWhitelist();
+  await updateProxyStateUI();
   
   document.getElementById('save').addEventListener('click', saveOptions);
   document.getElementById('addWhitelist').addEventListener('click', () => addWhitelistItem());
+  document.getElementById('toggleProxy').addEventListener('click', toggleProxy);
+  
+  // 监听存储变化，实时更新UI
+  chrome.storage.onChanged.addListener((changes) => {
+    if (changes.proxyEnabled) {
+      updateProxyStateUI();
+    }
+  });
 }); 

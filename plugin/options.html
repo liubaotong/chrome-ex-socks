@@ -98,10 +98,38 @@
       padding: 10px 24px;
       font-size: 16px;
     }
+    .proxy-status {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 15px;
+      background-color: #f5f5f5;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+    .status-text {
+      font-size: 14px;
+      color: #666;
+    }
+    #proxyState {
+      font-weight: bold;
+    }
+    .toggle-button {
+      min-width: 80px;
+      padding: 8px 16px;
+      transition: all 0.3s;
+    }
+    .toggle-button.enabled {
+      background-color: #f44336;
+    }
   </style>
 </head>
 <body>
   <h2>Socks5 代理设置</h2>
+  <div class="proxy-status">
+    <span class="status-text">代理状态：<span id="proxyState">已关闭</span></span>
+    <button id="toggleProxy" class="toggle-button">开启代理</button>
+  </div>
   <div class="form-group">
     <label for="host">代理服务器地址</label>
     <input type="text" id="host" placeholder="例如：127.0.0.1">

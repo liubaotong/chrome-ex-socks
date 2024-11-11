@@ -52,7 +52,6 @@ function showNotification(title, message) {
 // 设置代理配置
 async function setProxySettings(config) {
   try {
-    // 直连模式
     if (config.mode === "direct") {
       await chrome.proxy.settings.set({
         value: { mode: "direct" },
@@ -61,24 +60,17 @@ async function setProxySettings(config) {
       return;
     }
 
-    // 构建白名单规则
     const bypassList = ["localhost", "127.0.0.1"];
-    if (whitelistDomains && whitelistDomains.length > 0) {
+    if (whitelistDomains?.length > 0) {
       whitelistDomains.forEach(domain => {
         if (domain.startsWith('*.')) {
-          // 将 *.example.com 转换为 Chrome 代理格式
-          const baseDomain = domain.slice(2);
-          bypassList.push(
-            // 只添加通配符格式，不再添加其他变体
-            `[*.]${baseDomain}`    // Chrome 推荐的通配符格式
-          );
+          bypassList.push(`[*.]${domain.slice(2)}`);
         } else {
           bypassList.push(domain);
         }
       });
     }
 
-    // 设置代理配置
     const proxySettings = {
       value: {
         mode: "fixed_servers",
@@ -88,21 +80,22 @@ async function setProxySettings(config) {
             host: config.rules.singleProxy.host,
             port: config.rules.singleProxy.port
           },
-          bypassList: Array.from(new Set(bypassList)) // 去重
+          bypassList: Array.from(new Set(bypassList))
         }
       },
       scope: 'regular'
     };
 
-    console.log('正在设置代理配置:', JSON.stringify(proxySettings, null, 2));
     await chrome.proxy.settings.set(proxySettings);
-
-    // 验证配置是否生效
+    
+    // 验证设置是否生效
     const currentSettings = await chrome.proxy.settings.get({});
-    console.log('当前白名单规则:', bypassList);
+    if (currentSettings.value.mode !== proxySettings.value.mode) {
+      throw new Error('代理设置未能正确应用');
+    }
   } catch (error) {
-    console.error('设置代理失败:', error);
-    showNotification('Socks5 代理错误', '设置代理失败，请检查代理服务器是否正常运行');
+    handleError(error, '设置代理失败');
+    throw error;
   }
 }
 
@@ -184,7 +177,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.error('处理配置更新失败:', error);
         sendResponse({ success: false, error: error.message });
       });
-    return true; // 表明我们会异步发送响应
+    return true;
+  }
+  
+  if (request.action === 'toggleProxy') {
+    updateProxyState(request.enabled)
+      .then(() => {
+        sendResponse({ success: true });
+      })
+      .catch(error => {
+        console.error('切换代理状态失败:', error);
+        sendResponse({ success: false, error: error.message });
+      });
+    return true;
   }
 });
 
@@ -244,3 +249,9 @@ chrome.runtime.onStartup.addListener(async () => {
 chrome.runtime.onSuspend.addListener(async () => {
   await updateProxyState(false);
 });
+
+// 优化错误处理
+function handleError(error, context) {
+  console.error(`${context}:`, error);
+  showNotification('Socks5 代理错误', `${context}：${error.message}`);
+}
