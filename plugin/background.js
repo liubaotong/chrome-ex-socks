@@ -16,37 +16,22 @@ const directConfig = {
 };
 
 let whitelistDomains = [];
-let lastNotificationTime = 0;
-const NOTIFICATION_COOLDOWN = 5000; // 5秒冷却时间
 
-// 检查域名是否匹配白名单规则
-function isWhitelisted(url) {
-  try {
-    const hostname = new URL(url).hostname;
-    return whitelistDomains.some(pattern => {
-      if (pattern.startsWith('*.')) {
-        const domain = pattern.slice(2);
-        return hostname === domain || hostname.endsWith('.' + domain);
-      }
-      return hostname === pattern;
-    });
-  } catch (e) {
-    return false;
-  }
+// 添加统一的错误处理函数
+async function handleProxyError(action, error) {
+  console.error(`${action}:`, error);
+  showNotification('Socks5 代理错误', `${action}：${error.message}`);
+  throw error;
 }
 
 // 显示通知（带冷却时间）
 function showNotification(title, message) {
-  const now = Date.now();
-  if (now - lastNotificationTime > NOTIFICATION_COOLDOWN) {
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
-      title: title,
-      message: message
-    });
-    lastNotificationTime = now;
-  }
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: 'icons/icon128.png',
+    title: title,
+    message: message
+  });
 }
 
 // 设置代理配置
@@ -94,8 +79,7 @@ async function setProxySettings(config) {
       throw new Error('代理设置未能正确应用');
     }
   } catch (error) {
-    handleError(error, '设置代理失败');
-    throw error;
+    await handleProxyError('设置代理失败', error);
   }
 }
 
@@ -122,8 +106,7 @@ async function updateProxyConfig(config) {
       await setProxySettings(proxyConfig);
     }
   } catch (error) {
-    console.error('更新代理配置失败:', error);
-    showNotification('Socks5 代理错误', '更新代理配置失败，请检查设置');
+    await handleProxyError('更新代理配置失败', error);
   }
 }
 
@@ -205,8 +188,7 @@ async function updateProxyState(enabled) {
     // 保存状态
     await chrome.storage.local.set({ proxyEnabled: enabled });
   } catch (error) {
-    console.error('更新代理状态失败:', error);
-    showNotification('Socks5 代理错误', '更新代理状态失败');
+    await handleProxyError('更新代理状态失败', error);
   }
 }
 
@@ -225,8 +207,7 @@ async function initializeProxy() {
     // 更新状态为关闭
     await updateProxyState(false);
   } catch (error) {
-    console.error('初始化代理失败:', error);
-    showNotification('Socks5 代理错误', '初始化代理失败');
+    await handleProxyError('初始化代理失败', error);
   }
 }
 
@@ -249,9 +230,3 @@ chrome.runtime.onStartup.addListener(async () => {
 chrome.runtime.onSuspend.addListener(async () => {
   await updateProxyState(false);
 });
-
-// 优化错误处理
-function handleError(error, context) {
-  console.error(`${context}:`, error);
-  showNotification('Socks5 代理错误', `${context}：${error.message}`);
-}
