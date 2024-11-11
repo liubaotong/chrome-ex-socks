@@ -2,8 +2,6 @@
 async function saveOptions() {
   const host = document.getElementById('host').value;
   const port = document.getElementById('port').value;
-  const username = document.getElementById('username').value;
-  const password = document.getElementById('password').value;
 
   if (!host || !port) {
     showStatus('请填写服务器地址和端口', false);
@@ -20,23 +18,27 @@ async function saveOptions() {
     await chrome.storage.local.set({
       proxyConfig: {
         host,
-        port: parseInt(port),
-        username,
-        password
+        port: parseInt(port)
       },
       whitelistDomains: whitelist
     });
 
-    // 通知 background 更新配置
-    chrome.runtime.sendMessage({ 
-      action: 'updateProxyConfig',
-      config: { 
-        host, 
-        port: parseInt(port), 
-        username, 
-        password,
-        whitelist
-      }
+    // 修改消息发送方式，使用 Promise 处理响应
+    await new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({ 
+        action: 'updateProxyConfig',
+        config: { 
+          host, 
+          port: parseInt(port),
+          whitelist
+        }
+      }, response => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve(response);
+        }
+      });
     });
 
     showStatus('设置已保存', true);
@@ -50,15 +52,11 @@ async function loadOptions() {
   const result = await chrome.storage.local.get('proxyConfig');
   const config = result.proxyConfig || {
     host: '127.0.0.1',
-    port: 1080,
-    username: '',
-    password: ''
+    port: 1080
   };
 
   document.getElementById('host').value = config.host;
   document.getElementById('port').value = config.port;
-  document.getElementById('username').value = config.username;
-  document.getElementById('password').value = config.password;
 }
 
 // 添加白名单项

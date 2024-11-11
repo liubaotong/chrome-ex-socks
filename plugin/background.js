@@ -136,15 +136,36 @@ async function updateProxyConfig(config) {
 
 // 添加图标点击事件监听
 chrome.action.onClicked.addListener(async () => {
-  try {
-    const result = await chrome.storage.local.get(['proxyEnabled']);
-    const newState = !result.proxyEnabled;
-    await updateProxyState(newState);
-  } catch (error) {
-    console.error('切换代理状态失败:', error);
-    showNotification('Socks5 代理错误', '切换代理状态失败');
-  }
+  const result = await chrome.storage.local.get(['proxyEnabled']);
+  const newState = !result.proxyEnabled;
+  
+  // 更新存储状态
+  await chrome.storage.local.set({ proxyEnabled: newState });
+  
+  // 更新图标状态
+  await updateIcon(newState);
+  
+  // 更新代理设置
+  await setProxySettings(newState ? proxyConfig : directConfig);
 });
+
+// 更新图标状态
+async function updateIcon(enabled) {
+  const path = enabled ? {
+    16: "icons/icon16.png",
+    48: "icons/icon48.png",
+    128: "icons/icon128.png"
+  } : {
+    16: "icons/icon16_off.png",
+    48: "icons/icon48_off.png",
+    128: "icons/icon128_off.png"
+  };
+  
+  await chrome.action.setIcon({ path });
+  await chrome.action.setTitle({ 
+    title: enabled ? "代理已启用" : "代理已禁用" 
+  });
+}
 
 // 监听代理错误
 chrome.proxy.onProxyError.addListener(function(details) {
@@ -155,28 +176,26 @@ chrome.proxy.onProxyError.addListener(function(details) {
 // 监听消息
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'updateProxyConfig') {
-    updateProxyConfig(request.config).catch(error => {
-      console.error('处理配置更新失败:', error);
-    });
+    updateProxyConfig(request.config)
+      .then(() => {
+        sendResponse({ success: true });
+      })
+      .catch(error => {
+        console.error('处理配置更新失败:', error);
+        sendResponse({ success: false, error: error.message });
+      });
+    return true; // 表明我们会异步发送响应
   }
-  // 必须返回 true 以支持异步响应
-  return true;
 });
 
 // 更新代理状态
 async function updateProxyState(enabled) {
   try {
     // 设置代理
-    await setProxySettings(enabled ? proxyConfig : { mode: "direct" });
+    await setProxySettings(enabled ? proxyConfig : directConfig);
 
     // 更新图标
-    const iconPath = {
-      "16": enabled ? "icons/icon16.png" : "icons/icon16_off.png",
-      "48": enabled ? "icons/icon48.png" : "icons/icon48_off.png",
-      "128": enabled ? "icons/icon128.png" : "icons/icon128_off.png"
-    };
-
-    await chrome.action.setIcon({ path: iconPath });
+    await updateIcon(enabled);
     
     // 保存状态
     await chrome.storage.local.set({ proxyEnabled: enabled });
