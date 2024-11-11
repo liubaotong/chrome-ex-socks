@@ -167,7 +167,7 @@ func (s *Server) handleConnect(conn net.Conn, atyp byte) error {
 	target := fmt.Sprintf("%s:%d", host, port)
 	s.logger.Debug("正在连接到目标服务器: %s", target)
 
-	targetConn, err := net.Dial("tcp", target)
+	targetConn, err := net.DialTimeout("tcp", target, 10*time.Second)
 	if err != nil {
 		// 发送连接失败响应
 		conn.Write([]byte{0x05, 0x04, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
@@ -176,16 +176,13 @@ func (s *Server) handleConnect(conn net.Conn, atyp byte) error {
 	defer targetConn.Close()
 
 	// 4. 发送连接成功响应
-	// 响应格式: VER | REP | RSV | ATYP | BND.ADDR | BND.PORT
 	localAddr := targetConn.LocalAddr().(*net.TCPAddr)
 	response := make([]byte, 10)
 	response[0] = 0x05 // VER
 	response[1] = 0x00 // REP: succeeded
 	response[2] = 0x00 // RSV
 	response[3] = 0x01 // ATYP: IPv4
-	// BND.ADDR
 	copy(response[4:8], localAddr.IP.To4())
-	// BND.PORT
 	response[8] = byte(localAddr.Port >> 8)
 	response[9] = byte(localAddr.Port & 0xff)
 
@@ -197,51 +194,33 @@ func (s *Server) handleConnect(conn net.Conn, atyp byte) error {
 	s.logger.Debug("开始转发数据: %s <-> %s", conn.RemoteAddr(), target)
 	
 	errCh := make(chan error, 2)
-	go func() {
-		// 添加重试机制
-		for retries := 0; retries < 3; retries++ {
-			_, err := io.Copy(targetConn, conn)
-			if err != nil && !isConnectionReset(err) {
-				errCh <- err
-				return
-			}
-			if err == nil {
-				errCh <- nil
-				return
-			}
-			// 如果是连接重置，等待短暂时间后重试
-			time.Sleep(time.Second * time.Duration(retries+1))
-		}
-		errCh <- errors.New("达到最大重试次数")
-	}()
-
-	go func() {
-		// 添加重试机制
-		for retries := 0; retries < 3; retries++ {
-			_, err := io.Copy(conn, targetConn)
-			if err != nil && !isConnectionReset(err) {
-				errCh <- err
-				return
-			}
-			if err == nil {
-				errCh <- nil
-				return
-			}
-			// 如果是连接重置，等待短暂时间后重试
-			time.Sleep(time.Second * time.Duration(retries+1))
-		}
-		errCh <- errors.New("达到最大重试次数")
-	}()
+	go s.forwardData(targetConn, conn, errCh)
+	go s.forwardData(conn, targetConn, errCh)
 
 	// 等待任意一个方向的数据传输出错或完成
 	err = <-errCh
-	if err != nil {
-		if isConnectionReset(err) {
-			s.logger.Debug("连接被重置，可能是正常的连接关闭: %v", err)
-			return nil
-		}
+	if err != nil && !isConnectionReset(err) {
 		return fmt.Errorf("数据转发错误: %v", err)
 	}
 
 	return nil
+}
+
+// 添加数据转发函数
+func (s *Server) forwardData(dst net.Conn, src net.Conn, errCh chan error) {
+	// 添加重试机制
+	for retries := 0; retries < 3; retries++ {
+		_, err := io.Copy(dst, src)
+		if err != nil && !isConnectionReset(err) {
+			errCh <- err
+			return
+		}
+		if err == nil {
+			errCh <- nil
+			return
+		}
+		// 如果是连接重置，等待短暂时间后重试
+		time.Sleep(time.Second * time.Duration(retries+1))
+	}
+	errCh <- errors.New("达到最大重试次数")
 }

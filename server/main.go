@@ -3,6 +3,9 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"github.com/liubaotong/socks5-proxy/socks5"
 )
 
@@ -20,7 +23,22 @@ func main() {
 		Port: *port,
 	}
 
-	// 创建并启动服务器
+	// 创建服务器
 	server := socks5.NewServer(config)
-	log.Fatal(server.Start())
+
+	// 处理信号
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// 启动服务器
+	go func() {
+		if err := server.Start(); err != nil {
+			log.Printf("服务器错误: %v", err)
+			sigChan <- syscall.SIGTERM
+		}
+	}()
+
+	// 等待信号
+	sig := <-sigChan
+	log.Printf("收到信号 %v，正在关闭服务器...", sig)
 }
