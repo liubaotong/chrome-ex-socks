@@ -37,22 +37,39 @@
       background-color: #45a049;
     }
     .status {
-      width: 100px;
-      margin: 15px auto 0;
-      padding: 10px;
-      text-align: center;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      min-width: 200px;
+      padding: 12px 20px;
       border-radius: 4px;
       display: none;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      z-index: 1000;
+      animation: fadeInUp 0.3s ease;
+      font-size: 14px;
+    }
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translate(-50%, 20px);
+      }
+      to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
     }
     .success {
-      background-color: #dff0d8;
-      color: #3c763d;
-      border: 1px solid #d6e9c6;
+      background-color: #e8f5e9;
+      color: #2e7d32;
+      border: 1px solid #c8e6c9;
     }
     .error {
-      background-color: #f2dede;
-      color: #a94442;
-      border: 1px solid #ebccd1;
+      background-color: #ffebee;
+      color: #c62828;
+      border: 1px solid #ffcdd2;
     }
     .whitelist-container {
       margin-top: 20px;
@@ -89,15 +106,6 @@
       color: #666;
       margin-top: 5px;
     }
-    .save-container {
-      text-align: center;
-      margin-top: 20px;
-    }
-    #save {
-      min-width: 120px;
-      padding: 10px 24px;
-      font-size: 16px;
-    }
     .proxy-status {
       display: flex;
       align-items: center;
@@ -121,6 +129,80 @@
     }
     .toggle-button.enabled {
       background-color: #f44336;
+    }
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    
+    .action-buttons button {
+      min-width: 120px;
+      padding: 10px 24px;
+      font-size: 14px;
+    }
+    
+    .import-button {
+      background-color: #2196F3;
+    }
+    
+    .export-button {
+      background-color: #607D8B;
+    }
+    
+    .hidden {
+      display: none;
+    }
+    
+    /* 输入验证样式 */
+    .invalid {
+      border-color: #f44336;
+      background-color: #ffebee;
+    }
+    
+    .error-message {
+      color: #f44336;
+      font-size: 12px;
+      margin-top: 4px;
+      display: none;
+    }
+    
+    .error-message.show {
+      display: block;
+    }
+    
+    /* 修改按钮容器样式 */
+    .button-group {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin-top: 20px;
+    }
+    
+    .button-group button {
+      flex: 1;
+      max-width: 160px;
+      padding: 12px 24px;
+      font-size: 14px;
+    }
+    
+    /* 修改按钮颜色 */
+    .save-button {
+      background-color: #4CAF50;
+    }
+    
+    .import-button {
+      background-color: #2196F3;
+    }
+    
+    .export-button {
+      background-color: #607D8B;
+    }
+    
+    /* 移除旧的 save-container 和 action-buttons 样式 */
+    .save-container, .action-buttons {
+      display: none;
     }
   </style>
 </head>
@@ -146,9 +228,13 @@
     <button id="addWhitelist" class="add-button">添加白名单</button>
   </div>
   
-  <div class="save-container">
-    <button id="save">保存设置</button>
+  <div class="button-group">
+    <button id="save" class="save-button">保存设置</button>
+    <button id="importBtn" class="import-button">导入配置</button>
+    <button id="exportBtn" class="export-button">导出配置</button>
+    <input type="file" id="importInput" accept=".json" class="hidden">
   </div>
+  
   <div id="status" class="status"></div>
   <script src="options.js"></script>
 </body>
