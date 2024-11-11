@@ -1,0 +1,9 @@
+1、覆盖率测试：
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
+
+2、运行测试
+go test ./... -v
+
+3、运行压力测试
+go test -bench=. -benchmem ./...

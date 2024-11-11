@@ -10,16 +10,19 @@ import (
 	"time"
 )
 
+// Config 定义服务器配置
 type Config struct {
-	IP       string
-	Port     int
+	IP   string // 服务器监听的IP地址
+	Port int    // 服务器监听的端口
 }
 
+// Server 定义SOCKS5服务器结构
 type Server struct {
-	config *Config
-	logger *Logger
+	config *Config // 服务器配置
+	logger *Logger // 日志记录器
 }
 
+// NewServer 创建新的SOCKS5服务器实例
 func NewServer(config *Config) *Server {
 	return &Server{
 		config: config,
@@ -27,7 +30,9 @@ func NewServer(config *Config) *Server {
 	}
 }
 
+// Start 启动SOCKS5服务器
 func (s *Server) Start() error {
+	// 创建TCP监听器
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", s.config.IP, s.config.Port))
 	if err != nil {
 		return err
@@ -35,8 +40,10 @@ func (s *Server) Start() error {
 
 	s.logger.Info("服务器启动在端口 %s:%d", s.config.IP, s.config.Port)
 
+	// 使用WaitGroup来管理goroutine
 	var wg sync.WaitGroup
 	for {
+		// 接受新的连接
 		conn, err := listener.Accept()
 		if err != nil {
 			s.logger.Error("接受连接错误: %v", err)
@@ -44,6 +51,7 @@ func (s *Server) Start() error {
 		}
 
 		wg.Add(1)
+		// 为每个连接创建新的goroutine
 		go func() {
 			defer wg.Done()
 			s.handleConnection(conn)
