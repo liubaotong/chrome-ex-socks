@@ -1,3 +1,4 @@
+// Proxy configuration with default values
 let proxyConfig = {
   mode: "fixed_servers",
   rules: {
@@ -17,11 +18,15 @@ const directConfig = {
 
 let whitelistDomains = [];
 
+// Lock to prevent race conditions in proxy state updates
+let proxyUpdateLock = false;
+
 // 添加统一的错误处理函数
 async function handleProxyError(action, error) {
   console.error(`${action}:`, error);
   showNotification('Socks5 代理错误', `${action}：${error.message}`);
-  throw error;
+  // 不再抛出错误，而是返回错误信息
+  return { success: false, error: error.message };
 }
 
 // 显示通知（带冷却时间）
@@ -83,7 +88,10 @@ async function setProxySettings(config) {
   }
 }
 
-// 更新代理配置
+// Debounce timer for configuration updates
+let configUpdateTimer = null;
+
+// 更新代理配置（带防抖）
 async function updateProxyConfig(config) {
   try {
     // 更新代理配置
@@ -100,11 +108,26 @@ async function updateProxyConfig(config) {
       return domain;
     });
     
-    // 如果代理已启用，立即应用新配置
-    const result = await chrome.storage.local.get(['proxyEnabled']);
-    if (result.proxyEnabled) {
-      await setProxySettings(proxyConfig);
+    // 防抖处理：延迟应用配置变更
+    if (configUpdateTimer) {
+      clearTimeout(configUpdateTimer);
     }
+    
+    // 使用Promise包装以确保调用者能正确等待
+    return new Promise((resolve, reject) => {
+      configUpdateTimer = setTimeout(async () => {
+        try {
+          // 如果代理已启用，立即应用新配置
+          const result = await chrome.storage.local.get(['proxyEnabled']);
+          if (result.proxyEnabled) {
+            await setProxySettings(proxyConfig);
+          }
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      }, 300); // 300ms防抖延迟
+    });
   } catch (error) {
     await handleProxyError('更新代理配置失败', error);
   }
@@ -176,8 +199,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-// 更新代理状态
+// 更新代理状态（带锁机制防止并发）
 async function updateProxyState(enabled) {
+  // 如果正在更新，则等待
+  while (proxyUpdateLock) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  
+  // 获取锁
+  proxyUpdateLock = true;
+  
   try {
     // 设置代理
     await setProxySettings(enabled ? proxyConfig : directConfig);
@@ -189,6 +220,9 @@ async function updateProxyState(enabled) {
     await chrome.storage.local.set({ proxyEnabled: enabled });
   } catch (error) {
     await handleProxyError('更新代理状态失败', error);
+  } finally {
+    // 释放锁
+    proxyUpdateLock = false;
   }
 }
 
